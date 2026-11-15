@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Catalogue data stays local unless its redistribution terms are verified.
+data/
+local-data/
+adw-out/
+*.dat
+*.gz
+# Real exports (the synthetic fixture in tests/fixtures is explicitly allowed):
+*.tsv
+!tests/fixtures/*.tsv
+.env
