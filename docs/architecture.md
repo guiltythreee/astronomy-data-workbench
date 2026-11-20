@@ -12,7 +12,9 @@ ADW is a pipeline; each stage has one job and passes explicit typed data on.
 | `schemas/` | expected columns, frame/epoch/units conventions |
 | `validation/` | issues, config, row-level classification |
 | `export/` | audit bundle writer and verifier |
-| `cli.py` | `adw inspect / validate / export / audit` |
+| `cli.py` | `adw inspect / validate / export / audit / modules / coords-lab / explorer / crossmatch` |
 
-Planned (not built yet): `matching/` (Phase 2), `coordinates/` (Phase 3), `identity/` (Phase 4).
+Also present, none validated on real catalogues: `matching/` (Phase 2, partial, UNVERIFIED, `adw crossmatch`),
+`coordinates/` (Phase 3, partial) and `identity/` (Phase 4, partial, synthetic
+records only). See `docs/modules.md` for the current status of each.
 ADW is independent of Star Map; Star Map consumes only reviewed, versioned outputs.

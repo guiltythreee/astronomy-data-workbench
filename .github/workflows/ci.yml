@@ -22,8 +22,15 @@ jobs:
         run: pytest
       - name: Package build
         run: python -m build
+      - name: Installed-wheel smoke test (package data present)
+        run: |
+          python -m venv /tmp/wheelenv
+          /tmp/wheelenv/bin/pip install dist/*.whl
+          /tmp/wheelenv/bin/adw explorer --out /tmp/explorer.html
+          /tmp/wheelenv/bin/adw coords-lab --out /tmp/coords.json
       - name: CLI smoke test on synthetic fixture
         run: |
           adw inspect tests/fixtures/bsc_synthetic.tsv
           adw export bsc-tsv tests/fixtures/bsc_synthetic.tsv --out adw-out
           adw audit adw-out --source tests/fixtures/bsc_synthetic.tsv
+          adw crossmatch demo --out /tmp/adw-crossmatch-demo

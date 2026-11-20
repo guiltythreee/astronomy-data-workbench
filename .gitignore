@@ -2,11 +2,15 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 build/
-dist/
+dist/*
+!dist/
+!dist/*.pyz
+!dist/README.txt
 .venv/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.hypothesis/
 
 # Catalogue data stays local unless its redistribution terms are verified.
 data/
