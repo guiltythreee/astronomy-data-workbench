@@ -205,8 +205,12 @@ def validate_table(table: RawTable, config: ValidationConfig | None = None) -> V
         if plx is not None:
             record.parallax_mas = plx * schema.ARCSEC_TO_MAS
             if record.parallax_mas < 0:
-                issues.append(Issue("PARALLAX_NEGATIVE", WARNING, "Parallax",
-                                    f"negative parallax {record.parallax_mas:.1f} mas"))  # fmt: skip
+                # A negative measured parallax is a valid astrometric measurement (noise on
+                # a small true parallax), not a data-quality fault: keep the signed value
+                # and record an informational diagnostic that does not affect the outcome.
+                issues.append(Issue("PARALLAX_NEGATIVE", INFO, "Parallax",
+                                    f"negative measured parallax {record.parallax_mas:.1f} mas "
+                                    "(kept as measured; not a validation failure)"))  # fmt: skip
             elif record.parallax_mas > cfg.parallax_max_mas:
                 issues.append(Issue("PARALLAX_SUSPICIOUS", WARNING, "Parallax",
                                     f"parallax {record.parallax_mas:.1f} mas exceeds "

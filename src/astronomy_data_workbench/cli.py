@@ -1,4 +1,4 @@
-"""Command-line interface: adw inspect | validate | export | audit."""
+"""Command-line interface for catalogue validation and the ADW specialist tools."""
 
 from __future__ import annotations
 
@@ -11,9 +11,11 @@ from astronomy_data_workbench import __version__
 from astronomy_data_workbench.errors import SchemaError, SourceError
 from astronomy_data_workbench.export import verify_bundle, write_bundle
 from astronomy_data_workbench.inspection import inspect_file
+from astronomy_data_workbench.modules import MODULES
 from astronomy_data_workbench.provenance import build_manifest, sha256_file
 from astronomy_data_workbench.schemas import bsc as schema
 from astronomy_data_workbench.sources.bsc import read_raw_table
+from astronomy_data_workbench.validation.hip2 import validate_hip2_table
 from astronomy_data_workbench.validation import (
     ACCEPTED,
     ValidationConfig,
@@ -50,6 +52,32 @@ def cmd_inspect(args: argparse.Namespace) -> int:
     for key, value in info.items():
         print(f"{key}: {value}")
     return 0
+
+
+def cmd_validate_hip2(args: argparse.Namespace) -> int:
+    table = read_raw_table(args.file)
+    result = validate_hip2_table(table)
+    counts = result.counts()
+    print(f"rows: {counts['total_rows']}  accepted: {counts['accepted']}  "
+          f"review: {counts['review']}  rejected: {counts['rejected']}")
+    print(f"catalogue: {result.metadata['catalogue']}")
+    print(f"position frame: {result.metadata['frame']}  epoch: J{result.metadata['epoch_jyear']}")
+    for issue in result.file_issues:
+        print(f"file {issue.severity}: {issue.code}: {issue.message}")
+    if result.issue_code_counts():
+        print("issue codes: " + ", ".join(
+            f"{key}={value}" for key, value in result.issue_code_counts().items()))
+    for row in result.rows:
+        if row.outcome != ACCEPTED:
+            hip = row.normalized.get("HIP") if row.normalized else None
+            reasons = "; ".join(issue.code for issue in row.issues)
+            print(f"line {row.line_number} (HIP {hip}): {row.outcome}: {reasons}")
+    if args.jsonl is not None:
+        args.jsonl.write_text("\n".join(
+            json.dumps(row.to_dict(), sort_keys=True) for row in result.rows) + "\n",
+            encoding="utf-8")
+        print(f"row results written to {args.jsonl}")
+    return 1 if args.strict and counts["accepted"] != counts["total_rows"] else 0
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
@@ -108,6 +136,45 @@ def cmd_audit(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_modules(args: argparse.Namespace) -> int:
+    if args.json:
+        print(json.dumps([m.to_dict() for m in MODULES], indent=2))
+        return 0
+    for m in MODULES:
+        print(f"{m.number} {m.name}  [{m.status}, priority {m.priority}]")
+        print(f"   {m.description}")
+        for item in m.responsibilities:
+            print(f"   - {item}")
+        print(f"   command: {m.command or '(none yet)'}")
+        print(f"   note: {m.status_note}")
+        print()
+    return 0
+
+
+def cmd_coords_lab(args: argparse.Namespace) -> int:
+    # Imported lazily so catalogue commands remain usable without optional astronomy deps.
+    try:
+        from astronomy_data_workbench.coordinates.lab import main as lab_main
+    except ModuleNotFoundError as exc:
+        if exc.name in {"astropy", "numpy"}:
+            print(
+                f"error: the coordinate lab needs NumPy and Astropy ({exc.name} missing)",
+                file=sys.stderr,
+            )
+            return 2
+        raise
+    return lab_main(["--out", str(args.out)])
+
+
+def cmd_explorer(args: argparse.Namespace) -> int:
+    from astronomy_data_workbench.identity.build_explorer import build
+
+    build(args.records, args.out)
+    label = "bundled SYNTHETIC data" if args.records is None else str(args.records)
+    print(f"wrote {args.out} from {label}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="adw", description="Astronomy Data Workbench")
     parser.add_argument("--version", action="version", version=f"adw {__version__}")
@@ -129,6 +196,11 @@ def build_parser() -> argparse.ArgumentParser:
     add_validation_options(pb)
     pb.add_argument("--strict", action="store_true", help="exit 1 unless every row is accepted")
     pb.set_defaults(func=cmd_validate)
+    ph = vsub.add_parser("hip2-tsv", help="Hipparcos-2 (I/311/hip2) VizieR TSV export")
+    ph.add_argument("file", type=Path)
+    ph.add_argument("--strict", action="store_true", help="exit 1 unless every row is accepted")
+    ph.add_argument("--jsonl", type=Path, default=None, help="write normalized row results as JSONL")
+    ph.set_defaults(func=cmd_validate_hip2)
 
     p = sub.add_parser("export", help="validate and write an audit bundle")
     esub = p.add_subparsers(dest="kind", required=True)
@@ -141,10 +213,28 @@ def build_parser() -> argparse.ArgumentParser:
     pb.add_argument("--licence-status", default="unverified")
     pb.set_defaults(func=cmd_export)
 
+    p = sub.add_parser("modules", help="list the ADW modules, descriptions and status")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_modules)
+
     p = sub.add_parser("audit", help="show and verify an audit bundle")
     p.add_argument("bundle", type=Path)
     p.add_argument("--source", type=Path, default=None, help="also re-hash the original source file")
     p.set_defaults(func=cmd_audit)
+
+    p = sub.add_parser("coords-lab", help="run coordinate reference suites and write a JSON report")
+    p.add_argument("--out", type=Path, default=Path("coords-lab-report.json"))
+    p.set_defaults(func=cmd_coords_lab)
+
+    p = sub.add_parser("explorer", help="build the local star identity explorer page")
+    p.add_argument("records", type=Path, nargs="?", default=None,
+                   help="records JSON (default: bundled synthetic test data)")
+    p.add_argument("--out", type=Path, default=Path("identity-explorer.html"))
+    p.set_defaults(func=cmd_explorer)
+
+    from astronomy_data_workbench.matching.cli import register as register_crossmatch
+
+    register_crossmatch(sub)
     return parser
 
 

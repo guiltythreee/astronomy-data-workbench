@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ADW Star Identity Explorer</title>
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--mut:#5c5c5c;--card:#f5f5f2;--line:#d8d8d2;--acc:#1f5fa8;--ok:#1d7a3a;--rev:#9a6200;--bad:#b3261e;--warn:#fff3c4;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#16181b;--fg:#e8e8e4;--mut:#a0a09a;--card:#1f2226;--line:#33373c;--acc:#7fb2ee;--ok:#5ec27c;--rev:#e3a84b;--bad:#f2837c;--warn:#4a3d0c;color-scheme:dark}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,sans-serif}
+.banner{background:var(--warn);padding:.6rem 1rem;font-weight:600;border-bottom:1px solid var(--line)}
+main{display:grid;grid-template-columns:minmax(220px,300px) 1fr;gap:1rem;padding:1rem;max-width:1100px;margin:auto}
+@media(max-width:700px){main{grid-template-columns:1fr}}
+input{width:100%;padding:.5rem;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg)}
+ul{list-style:none;margin:.5rem 0;padding:0}li button{width:100%;text-align:left;margin:0 0 .3rem;padding:.5rem;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--fg);cursor:pointer}
+li button[aria-current="true"]{border-color:var(--acc)}
+section{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:.8rem 1rem;margin-bottom:.8rem}
+h1{font-size:1.1rem;margin:0}h2{font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);margin:0 0 .4rem}
+dl{display:grid;grid-template-columns:max-content 1fr;gap:.2rem 1rem;margin:0}dt{color:var(--mut)}dd{margin:0;overflow-wrap:anywhere}
+.unk{color:var(--mut);font-style:italic}.badge{display:inline-block;padding:.05rem .5rem;border-radius:99px;border:1px solid currentColor;font-size:.8rem}
+.accepted{color:var(--ok)}.review{color:var(--rev)}.rejected{color:var(--bad)}
+.match{border-top:1px solid var(--line);padding:.4rem 0}.match:first-of-type{border-top:0}
+.foot{color:var(--mut);font-size:.8rem;padding:0 1rem 1rem;max-width:1100px;margin:auto}
+</style></head><body>
+<div class="banner" role="note">SYNTHETIC DATA: invented values for testing this explorer. Nothing here is a real catalogue measurement.</div>
+<div class="banner" role="note">CROSS-MATCH STATUS: UNVERIFIED. Matching has only been tested on synthetic data, not against real BSC, Hipparcos or Gaia records. Treat every candidate and confidence below as unvalidated.</div>
+<main><div><input id="q" type="search" placeholder="Search ID or name" aria-label="Search by identifier or name"><ul id="list"></ul></div><div id="detail"></div></main>
+<div class="foot" id="foot"></div>
+<script>
+const DATA = /*DATA*/null;
+const META = /*META*/null;
+const $ = id => document.getElementById(id);
+function el(tag, text, cls){const e=document.createElement(tag); if(text!==undefined) e.textContent=text; if(cls) e.className=cls; return e}
+function val(v, unit){ if(v===null||v===undefined) return el("span","not provided","unk"); return el("span", unit? v+" "+unit : String(v)); }
+function dl(rows){const d=el("dl"); for(const [k,v] of rows){d.append(el("dt",k)); const dd=el("dd"); dd.append(typeof v==="object"&&v!==null&&v.nodeType? v : val(v)); d.append(dd);} return d}
+function sec(title, ...kids){const s=el("section"); s.append(el("h2",title), ...kids); return s}
+function render(r){
+  const d=$("detail"); d.replaceChildren();
+  const head=sec("Object"); const h=el("h1",r.name+" "); h.append(el("span",r.validation.state,"badge "+r.validation.state)); head.append(h, dl([["Record key",r.key],["Kind",r.kind],["Source row",r.source_row]])); d.append(head);
+  d.append(sec("Identifiers", dl(Object.entries(r.identifiers))));
+  const p=r.position; d.append(sec("Position (as supplied)", dl([["RA",val(p.ra_deg,"deg")],["Dec",val(p.dec_deg,"deg")],["Frame",val(p.frame)],["Equinox",val(p.equinox)],["Epoch",val(p.epoch)],["Uncertainty",val(p.uncertainty)]])));
+  const a=r.astrometry; d.append(sec("Astrometry", dl([["Proper motion RA",val(a.pm_ra_cosdec_mas_yr,"mas/yr")],["Proper motion Dec",val(a.pm_dec_mas_yr,"mas/yr")],["RA convention",val(a.pm_convention)],["Parallax",val(a.parallax_mas,"mas")],["Parallax error",val(a.parallax_err_mas,"mas")],["Radial velocity",val(a.radial_velocity_km_s,"km/s")]])));
+  d.append(sec("Photometry", dl([["Magnitude",val(r.photometry.magnitude)],["Passband",val(r.photometry.passband)]])));
+  d.append(sec("Quality flags", r.quality_flags.length? dl(r.quality_flags.map((f,i)=>[i+1,f])) : el("span","none recorded","unk")));
+  const vs=sec("Validation"); if(r.validation.issues.length) vs.append(dl(r.validation.issues.map(i=>[i.code,i.message]))); else vs.append(el("span","no issues recorded","unk")); d.append(vs);
+  const ms=sec("Cross-match candidates (UNVERIFIED)"); if(!r.matches.length) ms.append(el("span","no candidates (none attempted or none found)","unk"));
+  for(const m of r.matches){const b=el("div",undefined,"match"); b.append(el("strong",m.candidate_id+" ("+m.catalogue+") "), el("span","UNVERIFIED","badge review"), el("div","confidence "+m.confidence+" · "+m.state)); const ul=el("ul"); for(const e of m.evidence) ul.append(el("li",e)); b.append(ul); ms.append(b);} d.append(ms);
+  d.append(sec("Provenance", dl([["Source",META.source],["Input SHA-256",META.input_sha256],["Parser version",val(null)],["Schema",META.schema]])));
+}
+function list(){const t=$("q").value.trim().toLowerCase(); const ul=$("list"); ul.replaceChildren();
+  for(const r of DATA.records){const hay=(r.name+" "+r.key+" "+Object.values(r.identifiers).filter(Boolean).join(" ")).toLowerCase(); if(t&&!hay.includes(t)) continue;
+    const li=el("li"), b=el("button",r.name+" · "+r.validation.state); b.type="button"; b.onclick=()=>{render(r); for(const x of ul.querySelectorAll("button")) x.removeAttribute("aria-current"); b.setAttribute("aria-current","true")}; li.append(b); ul.append(li);}
+  if(!ul.children.length) ul.append(el("li","No matching records","unk"));
+}
+$("q").addEventListener("input",list); list(); $("foot").textContent=DATA.note+" Missing values are shown as \u201cnot provided\u201d and are never filled in.";
+if(DATA.records.length) render(DATA.records[0]);
+</script></body></html>

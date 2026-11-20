@@ -86,3 +86,15 @@ def test_bad_input_gives_clean_error(tmp_path, capsys):
     p.write_text("a,b,c\n1,2,3\n")
     assert main(["validate", "bsc-tsv", str(p)]) == 2
     assert "missing required columns" in capsys.readouterr().err
+
+
+def test_hip2_validator_cli_writes_jsonl(tmp_path, capsys):
+    from tests.unit.test_hip2_validation import HEADER, valid_row, make_file
+
+    source = make_file(tmp_path, [valid_row()])
+    output = tmp_path / "hip2.jsonl"
+    assert main(["validate", "hip2-tsv", str(source), "--jsonl", str(output)]) == 0
+    assert "accepted: 1" in capsys.readouterr().out
+    import json
+    record = json.loads(output.read_text(encoding="utf-8"))
+    assert record["record"]["position"]["epoch_jyear"] == 1991.25

@@ -9,6 +9,7 @@ from astronomy_data_workbench.validation import (
     ValidationConfig,
     validate_table,
 )  # fmt: skip
+from astronomy_data_workbench.validation.issues import INFO
 from conftest import HEADER, row
 
 
@@ -107,13 +108,33 @@ def test_suspicious_values_go_to_review(make_tsv):
         "VMAG_OUT_OF_RANGE": row(vmag="15"),
         "PM_INCOMPLETE": row(pmra="0.1", pmde=""),
         "PM_SUSPICIOUS": row(pmra="9.0", pmde="9.0"),
-        "PARALLAX_NEGATIVE": row(plx="-0.01"),
         "PARALLAX_SUSPICIOUS": row(plx="2.0"),
         "RADVEL_SUSPICIOUS": row(rv="900"),
     }
     for code, r_ in cases.items():
         res = run(make_tsv, [r_])
         assert res.rows[0].outcome == REVIEW and code in codes(res), code
+
+
+def test_negative_parallax_is_accepted_and_kept_signed(make_tsv):
+    res = run(make_tsv, [row(plx="-0.012")])
+    r = res.rows[0]
+    assert r.outcome == ACCEPTED
+    assert r.record is not None and r.record.parallax_mas == pytest.approx(-12.0)
+    neg = [i for i in r.issues if i.code == "PARALLAX_NEGATIVE"]
+    assert len(neg) == 1 and neg[0].severity == INFO
+
+
+def test_negative_parallax_does_not_hide_other_problems(make_tsv):
+    res = run(make_tsv, [row(plx="-0.012", vmag="")])
+    assert res.rows[0].outcome == REVIEW
+    assert {"PARALLAX_NEGATIVE", "VMAG_MISSING"} <= set(codes(res))
+
+
+def test_zero_and_missing_parallax_are_unchanged(make_tsv):
+    res = run(make_tsv, [row(hr="1", plx="0.000"), row(hr="2", plx="")])
+    assert [r.outcome for r in res.rows] == [ACCEPTED, ACCEPTED]
+    assert "PARALLAX_NEGATIVE" not in codes(res, 0) | codes(res, 1)
 
 
 def test_missing_required_column_is_fatal(make_tsv):
@@ -153,3 +174,22 @@ def test_non_utf8_is_refused_not_guessed(tmp_path):
 def test_no_units_or_dashes_rows(make_tsv):
     r = run(make_tsv, [row(), row(hr="2")], units=False)
     assert [x.outcome for x in r.rows] == [ACCEPTED, ACCEPTED]
+
+
+def test_real_world_quirks_padding_trailing_blank_lines_multiple_spaces(tmp_path):
+    text = (
+        "# VizieR-like header comments\n#\n"
+        " HR \t RAJ2000 \t DEJ2000 \t Vmag \n"
+        "\t\"h:m:s\"\t\"d:m:s\"\tmag\n"
+        "----\t----\t----\t----\n"
+        "  1 \t01  08  23.2\t+86 15 25 \t 6.70 \n"
+        "\n\n"
+    )
+    p = tmp_path / "q.tsv"
+    p.write_text(text, encoding="utf-8")
+    table = read_raw_table(p)
+    assert table.header == ["HR", "RAJ2000", "DEJ2000", "Vmag"]
+    assert table.blank_line_count == 2
+    res = validate_table(table).rows
+    assert len(res) == 1 and res[0].outcome == ACCEPTED
+    assert res[0].raw["HR"] == "  1 "  # raw text preserved exactly

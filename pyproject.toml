@@ -4,21 +4,24 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "astronomy-data-workbench"
-version = "0.1.0"
+version = "0.1.4"
 description = "Reproducible astronomy catalogue ingestion, validation and audit tool."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
-dependencies = []
+dependencies = ["numpy>=1.26", "astropy>=6.0"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.5", "mypy>=1.10", "build>=1.0"]
+dev = ["pytest>=8", "hypothesis>=6", "ruff>=0.5", "mypy>=1.10", "build>=1.0"]
 
 [project.scripts]
 adw = "astronomy_data_workbench.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+astronomy_data_workbench = ["identity/*.html", "identity/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -32,3 +35,7 @@ src = ["src", "tests"]
 python_version = "3.12"
 strict = true
 files = ["src"]
+
+[[tool.mypy.overrides]]
+module = ["astropy", "astropy.*"]
+ignore_missing_imports = true
